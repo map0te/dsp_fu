@@ -77,6 +77,11 @@ module addmult64(
     // [63:48]  [63:48]                 (16 MUL)
     // [63:48]  [63:48]                 (16 ADD)
  
+ 
+   // Warning suppression
+   
+   wire [47:0] DSP7_P;
+   wire [47:0] DSP8_P;
 
    // DSP1
    
@@ -88,7 +93,7 @@ module addmult64(
    wire [47:0] DSP1_PCIN;
    
    wire [4:0] DSP1_INMODE;
-   wire [8:0] DSP1_OPMODE;
+   reg [8:0] DSP1_OPMODE;
    wire [3:0] DSP1_ALUMODE;
    wire [2:0] DSP1_CARRYINSEL;
    
@@ -104,15 +109,21 @@ module addmult64(
     case (OPCODE)
       6'b100000:  
         begin
-          DSP1_A = {14'b0, A[31:2]};
-          DSP1_B = {16'b0, A[1:0]};
-          DSP1_C = {16'b0, B};
+          DSP1_A = {14'b0, A[31:18]};
+          DSP1_B = A[17:0];
+          DSP1_C = {16'b0, B[31:0]};
+        end
+      6'b110000:  
+        begin
+          DSP1_A = {14'b0, A[31:18]};
+          DSP1_B = A[17:0];
+          DSP1_C = {16'b0, B[31:0]};
         end
       default:    
         begin
           DSP1_A = {4'b0, A[25:0]};
           DSP1_B = {1'b0, B[16:0]};
-          DSP1_C = 48'b0;
+          DSP1_C = {32'b0, A[15:0]};
         end
      endcase 
    end
@@ -120,9 +131,49 @@ module addmult64(
    assign DSP1_D = 27'b0;
    assign DSP1_PCIN = 48'b0;
    
+   always @ (*) begin
+    case (OPCODE[5:4])
+      2'b00:
+        begin
+          case (OPCODE[3:0])
+            4'b0000:
+              DSP1_OPMODE = 9'b000110011;
+            4'b0001:
+              DSP1_OPMODE = 9'b000000101;
+            default:
+              DSP1_OPMODE = 9'b000000101;
+          endcase
+        end
+      2'b10:
+        begin
+          case (OPCODE[3:0])
+            4'b0000:
+              DSP1_OPMODE = 9'b000110011;
+            4'b0001:
+              DSP1_OPMODE = 9'b000000101;
+            default:
+              DSP1_OPMODE = 9'b000000101;
+          endcase
+        end
+      2'b11:
+        begin
+          case (OPCODE[3:0])
+            4'b0000:
+              DSP1_OPMODE = 9'b000110011;
+            4'b0001:
+              DSP1_OPMODE = 9'b000000101;
+            default:
+              DSP1_OPMODE = 9'b000000101;
+          endcase
+        end
+      default:
+        DSP1_OPMODE = 9'b000000101;
+    endcase
+   end
+      
+   
    assign DSP1_INMODE = 5'b0;
-   assign DSP1_OPMODE = 9'b000000101;
-   assign DSP1_ALUMODE = 4'b0;
+   assign DSP1_ALUMODE = (OPCODE[3:0] == 4'b0001) ? 4'b0 : OPCODE[3:0];
    assign DSP1_CARRYINSEL = 3'b0;
    
    assign DSP1_CARRYIN = 1'b0;
@@ -170,7 +221,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(0),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(0),                          // Pipeline stages for A (0-2)
       .BCASCREG(0),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(0),                          // Pipeline stages for B (0-2)
@@ -180,7 +231,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP1 (
@@ -221,12 +272,12 @@ module addmult64(
       .CEA1(1'b0),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b0),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b0),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b0),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b0),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -258,7 +309,7 @@ module addmult64(
    wire [47:0] DSP2_PCIN;
    
    wire [4:0] DSP2_INMODE;
-   wire [8:0] DSP2_OPMODE;
+   reg [8:0] DSP2_OPMODE;
    wire [3:0] DSP2_ALUMODE;
    wire [2:0] DSP2_CARRYINSEL;
    
@@ -272,12 +323,25 @@ module addmult64(
    // assignment
    assign DSP2_ACIN = DSP1_ACOUT;
    assign DSP2_B = {1'b0, B[33:17]};
-   assign DSP2_C = 48'b0;
+   assign DSP2_C = {33'b0, DSP7_P[5:0], 9'b0};
    assign DSP2_D = 27'b0;
    assign DSP2_PCIN = DSP1_PCOUT;
    
    assign DSP2_INMODE = 5'b0;
-   assign DSP2_OPMODE = 9'b001010101;
+   
+   always @ (*) begin
+    case (OPCODE)
+      6'b100001:  
+        begin
+          DSP2_OPMODE = 9'b111010101;
+        end
+      default:    
+        begin
+          DSP2_OPMODE = 9'b001010101;
+        end
+     endcase 
+   end
+   
    assign DSP2_ALUMODE = 4'b0;
    assign DSP2_CARRYINSEL = 3'b0;
    
@@ -326,7 +390,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(1),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(1),                          // Pipeline stages for A (0-2)
       .BCASCREG(1),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(1),                          // Pipeline stages for B (0-2)
@@ -336,7 +400,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP2 (
@@ -377,12 +441,12 @@ module addmult64(
       .CEA1(1'b0),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b1),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b0),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b1),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b0),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -481,7 +545,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(1),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(1),                          // Pipeline stages for A (0-2)
       .BCASCREG(2),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(2),                          // Pipeline stages for B (0-2)
@@ -491,7 +555,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP3 (
@@ -532,12 +596,12 @@ module addmult64(
       .CEA1(1'b1),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b1),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b1),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b1),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b1),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -567,8 +631,8 @@ module addmult64(
    wire [26:0] DSP4_D;
    wire [47:0] DSP4_PCIN;
    
-   wire [4:0] DSP4_INMODE;
-   wire [8:0] DSP4_OPMODE;
+   reg [4:0] DSP4_INMODE;
+   reg [8:0] DSP4_OPMODE;
    wire [3:0] DSP4_ALUMODE;
    wire [2:0] DSP4_CARRYINSEL;
    
@@ -583,22 +647,42 @@ module addmult64(
    always @ (*) begin
     case (OPCODE[5:4])
       6'b11:  
+        case (OPCODE[3:0])
+          4'b0001:
+            begin
+              DSP4_A = {3'b0, A[51:26]};
+              DSP4_B = {1'b0, B[16:0]};
+              DSP4_C = 48'b0;
+            end
+          default:
+            begin
+              DSP4_A = A[63:50];
+              DSP4_B = A[49:32];
+              DSP4_C = B[63:32];
+            end
+        endcase    
+      2'b10:
         begin
-          DSP4_A = {3'b0, A[51:26]};
-          DSP4_B = {1'b0, B[16:0]};
-          DSP4_C = 48'b0;
-        end
-      6'b00:    
-        begin
-          DSP4_A = {11'b0, A[31:16]};
-          DSP4_B = {2'b0, B[31:16]};
-          DSP4_C = 48'b0;
+          case (OPCODE[3:0])
+            4'b0001:
+              begin
+                DSP4_A = {3'b0, A[57:32]};
+                DSP4_B = {1'b0, B[48:32]};
+                DSP4_C = 48'b0;
+              end
+            default:
+              begin
+                DSP4_A = A[63:50];
+                DSP4_B = A[49:32];
+                DSP4_C = B[63:32];
+              end
+          endcase
         end
       default:    
         begin
           DSP4_A = {11'b0, A[31:16]};
           DSP4_B = {2'b0, B[31:16]};
-          DSP4_C = 48'b0;
+          DSP4_C = A[31:16];
         end
      endcase 
    end
@@ -606,12 +690,28 @@ module addmult64(
    assign DSP4_D = 27'b0;
    assign DSP4_PCIN = 48'b0;
    
-   assign DSP4_INMODE = 5'b0;
-   assign DSP4_OPMODE = 9'b000000101;
-   assign DSP4_ALUMODE = 4'b0;
+   always @ (*) begin
+    case (OPCODE[5:0])
+      6'b110000:
+        DSP4_INMODE = 5'b00000;
+      default:
+        DSP4_INMODE = 5'b00000;
+    endcase
+   end
+   
+   always @ (*) begin
+    case (OPCODE[3:0])
+      4'b0001:
+        DSP4_OPMODE = 9'b000000101;
+      default:
+        DSP4_OPMODE = 9'b000110011;
+    endcase
+   end
+      
+   assign DSP4_ALUMODE = (OPCODE[3:0] == 4'b0001) ? 4'b0 : OPCODE[3:0];
    assign DSP4_CARRYINSEL = 3'b0;
    
-   assign DSP4_CARRYIN = 1'b0;
+   assign DSP4_CARRYIN = 1'b0; //for 64bit add
   
    // DSP48E2: 48-bit Multi-Functional Arithmetic Block
    //          Virtex UltraScale+
@@ -656,7 +756,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(0),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(0),                          // Pipeline stages for A (0-2)
       .BCASCREG(0),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(0),                          // Pipeline stages for B (0-2)
@@ -666,7 +766,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP4 (
@@ -707,12 +807,12 @@ module addmult64(
       .CEA1(1'b0),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b0),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b0),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b0),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b0),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -738,13 +838,13 @@ module addmult64(
    
    // inputs
    wire [29:0] DSP5_ACIN;
-   wire [17:0] DSP5_B;
+   reg [17:0] DSP5_B;
    wire [47:0] DSP5_C;
    wire [26:0] DSP5_D;
    wire [47:0] DSP5_PCIN;
    
    wire [4:0] DSP5_INMODE;
-   wire [8:0] DSP5_OPMODE;
+   reg [8:0] DSP5_OPMODE;
    wire [3:0] DSP5_ALUMODE;
    wire [2:0] DSP5_CARRYINSEL;
    
@@ -759,17 +859,35 @@ module addmult64(
    
    // assignment
    assign DSP5_ACIN = DSP4_ACOUT;
-   assign DSP5_B = {1'b0, B[33:17]};
+   
+   always @ (*) begin
+    case (OPCODE[5:4])
+      2'b10:
+        DSP5_B = B[63:49];
+      default:
+        DSP5_B = {1'b0, B[33:17]};
+    endcase
+   end
+   
    assign DSP5_C = {43'b0, DSP8_P[11:0], 9'b0};
    assign DSP5_D = 27'b0;
    assign DSP5_PCIN = DSP4_PCOUT;
    
    assign DSP5_INMODE = 5'b0;
-   assign DSP5_OPMODE = 9'b111010101;
+   
+   always @ (*) begin
+    case (OPCODE[5:0])
+      6'b110000:
+        DSP5_OPMODE = 9'b000010000;
+      default:
+        DSP5_OPMODE = 9'b111010101;
+    endcase
+   end
+        
    assign DSP5_ALUMODE = 4'b0;
    assign DSP5_CARRYINSEL = 3'b0;
    
-   assign DSP5_CARRYIN = 1'b0;
+   assign DSP5_CARRYIN = (OPCODE[5:0] == 6'b110000) ? DSP1_P[32] : 1'b0;
    
    // DSP48E2: 48-bit Multi-Functional Arithmetic Block
    //          Virtex UltraScale+
@@ -814,7 +932,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(1),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(1),                          // Pipeline stages for A (0-2)
       .BCASCREG(1),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(1),                          // Pipeline stages for B (0-2)
@@ -824,7 +942,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP5 (
@@ -865,12 +983,12 @@ module addmult64(
       .CEA1(1'b0),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b1),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b0),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b1),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b0),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -970,7 +1088,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(1),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(1),                          // Pipeline stages for A (0-2)
       .BCASCREG(2),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(2),                          // Pipeline stages for B (0-2)
@@ -980,7 +1098,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP6 (
@@ -1021,12 +1139,12 @@ module addmult64(
       .CEA1(1'b1),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b1),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b1),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b1),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b1),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -1052,12 +1170,12 @@ module addmult64(
    // inputs
    reg [29:0] DSP7_A;
    reg [17:0] DSP7_B;
-   reg [47:0] DSP7_C;
+   wire [47:0] DSP7_C;
    wire [26:0] DSP7_D;
    wire [47:0] DSP7_PCIN;
    
    wire [4:0] DSP7_INMODE;
-   wire [8:0] DSP7_OPMODE;
+   reg [8:0] DSP7_OPMODE;
    wire [3:0] DSP7_ALUMODE;
    wire [2:0] DSP7_CARRYINSEL;
    
@@ -1065,7 +1183,6 @@ module addmult64(
    
    // outputs
    wire [29:0] DSP7_ACOUT;
-   wire [47:0] DSP7_P;
    wire [47:0] DSP7_PCOUT;
    
    // input multiplex
@@ -1075,30 +1192,42 @@ module addmult64(
         begin
           DSP7_A = {4'b0, A[25:0]};
           DSP7_B = {5'b0, B[63:51]};
-          DSP7_C = 48'b0;
+        end
+      6'b10:
+        begin
+          DSP7_A = {21'b0, A[31:26]};
+          DSP7_B = {11'b0, B[6:0]};
         end
       6'b00:    
         begin
           DSP7_A = {11'b0, A[47:32]};
           DSP7_B = {2'b0, B[47:32]};
-          DSP7_C = 48'b0;
         end
       default:    
         begin
           DSP7_A = {11'b0, A[47:32]};
           DSP7_B = {2'b0, B[47:32]};
-          DSP7_C = 48'b0;
         end
     endcase 
    end
    
    // assignment  
+   assign DSP7_C = A[47:32];
    assign DSP7_D = 27'b0;
    assign DSP7_PCIN = 48'b0;
    
    assign DSP7_INMODE = 5'b0;
-   assign DSP7_OPMODE = 9'b000000101;
-   assign DSP7_ALUMODE = 4'b0;
+   
+   always @ (*) begin
+    case (OPCODE[3:0])
+      4'b0001:
+        DSP7_OPMODE = 9'b000000101;
+      default:
+        DSP7_OPMODE = 9'b000110011;
+    endcase
+   end
+   
+   assign DSP7_ALUMODE = (OPCODE[3:0] == 4'b0001) ? 4'b0 : OPCODE[3:0];
    assign DSP7_CARRYINSEL = 3'b0;
    
    assign DSP7_CARRYIN = 1'b0;
@@ -1146,7 +1275,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(0),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(0),                          // Pipeline stages for A (0-2)
       .BCASCREG(0),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(0),                          // Pipeline stages for B (0-2)
@@ -1156,7 +1285,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP7 (
@@ -1197,12 +1326,12 @@ module addmult64(
       .CEA1(1'b0),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b0),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b0),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b0),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b0),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -1231,12 +1360,12 @@ module addmult64(
    // inputs
    reg [29:0] DSP8_A;
    reg [17:0] DSP8_B;
-   reg [47:0] DSP8_C;
+   wire [47:0] DSP8_C;
    wire [26:0] DSP8_D;
    wire [47:0] DSP8_PCIN;
    
    wire [4:0] DSP8_INMODE;
-   wire [8:0] DSP8_OPMODE;
+   reg [8:0] DSP8_OPMODE;
    wire [3:0] DSP8_ALUMODE;
    wire [2:0] DSP8_CARRYINSEL;
    
@@ -1244,7 +1373,6 @@ module addmult64(
    
    // outputs
    wire [29:0] DSP8_ACOUT;
-   wire [47:0] DSP8_P;
    wire [47:0] DSP8_PCOUT;
    
    // input multiplex
@@ -1253,33 +1381,40 @@ module addmult64(
    
    always @ (*) begin
     case (OPCODE[5:4])
-      6'b11:  
+      2'b11:  
         begin
           DSP8_A = {4'b0, A[63:52]};
           DSP8_B = {1'b0, B[16:0]};
-          DSP8_C = 48'b0;
         end
-      6'b00:    
+      2'b10:  
         begin
-          DSP8_A = {11'b0, A[63:48]};
-          DSP8_B = {2'b0, B[63:48]};
-          DSP8_C = 48'b0;
+          DSP8_A = {21'b0, A[63:58]};
+          DSP8_B = {11'b0, B[38:32]};
         end
       default:    
         begin
           DSP8_A = {11'b0, A[63:48]};
           DSP8_B = {2'b0, B[63:48]};
-          DSP8_C = 48'b0;
         end
     endcase 
    end
 
+   assign DSP8_C = A[63:48];
    assign DSP8_D = 27'b0;
    assign DSP8_PCIN = 48'b0;
    
    assign DSP8_INMODE = 5'b0;
-   assign DSP8_OPMODE = 9'b000000101;
-   assign DSP8_ALUMODE = 4'b0;
+   
+   always @ (*) begin
+    case (OPCODE[3:0])
+      4'b0001:
+        DSP8_OPMODE = 9'b000000101;
+      default:
+        DSP8_OPMODE = 9'b000110011;
+    endcase
+   end
+   
+   assign DSP8_ALUMODE = (OPCODE[3:0] == 4'b0001) ? 4'b0 : OPCODE[3:0];
    assign DSP8_CARRYINSEL = 3'b0;
    
    assign DSP8_CARRYIN = 1'b0;
@@ -1327,7 +1462,7 @@ module addmult64(
       // Register Control Attributes: Pipeline Register Configuration
       .ACASCREG(0),                      // Number of pipeline stages between A/ACIN and ACOUT (0-2)
       .ADREG(0),                         // Pipeline stages for pre-adder (0-1)
-      .ALUMODEREG(1),                    // Pipeline stages for ALUMODE (0-1)
+      .ALUMODEREG(0),                    // Pipeline stages for ALUMODE (0-1)
       .AREG(0),                          // Pipeline stages for A (0-2)
       .BCASCREG(0),                      // Number of pipeline stages between B/BCIN and BCOUT (0-2)
       .BREG(0),                          // Pipeline stages for B (0-2)
@@ -1337,7 +1472,7 @@ module addmult64(
       .DREG(0),                          // Pipeline stages for D (0-1)
       .INMODEREG(0),                     // Pipeline stages for INMODE (0-1)
       .MREG(1),                          // Multiplier pipeline stages (0-1)
-      .OPMODEREG(1),                     // Pipeline stages for OPMODE (0-1)
+      .OPMODEREG(0),                     // Pipeline stages for OPMODE (0-1)
       .PREG(1)                           // Number of pipeline stages for P (0-1)
    )
    DSP48E2_DSP8 (
@@ -1378,12 +1513,12 @@ module addmult64(
       .CEA1(1'b0),                     // 1-bit input: Clock enable for 1st stage AREG
       .CEA2(1'b0),                     // 1-bit input: Clock enable for 2nd stage AREG
       .CEAD(1'b0),                     // 1-bit input: Clock enable for ADREG
-      .CEALUMODE(1'b1),           // 1-bit input: Clock enable for ALUMODE
+      .CEALUMODE(1'b0),           // 1-bit input: Clock enable for ALUMODE
       .CEB1(1'b0),                     // 1-bit input: Clock enable for 1st stage BREG
       .CEB2(1'b0),                     // 1-bit input: Clock enable for 2nd stage BREG
       .CEC(1'b0),                       // 1-bit input: Clock enable for CREG
       .CECARRYIN(1'b0),           // 1-bit input: Clock enable for CARRYINREG
-      .CECTRL(1'b1),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
+      .CECTRL(1'b0),                 // 1-bit input: Clock enable for OPMODEREG and CARRYINSELREG
       .CED(1'b0),                       // 1-bit input: Clock enable for DREG
       .CEINMODE(1'b0),             // 1-bit input: Clock enable for INMODEREG
       .CEM(1'b1),                       // 1-bit input: Clock enable for MREG
@@ -1414,30 +1549,54 @@ module addmult64(
     DSP4_P1 <= DSP4_P;
     DSP4_P2 <= DSP4_P1;
     DSP5_P1 <= DSP5_P;
-  end
+   end
    
    // Output assignment
    
-   wire [63:0] M64_0, M64_1, M64_2, M64_3, M64;
+   wire [63:0] M64_0, M64_1, M64_2, M64_3, M64, A64;
    wire [31:0] M32_0_0, M32_0_1, M32_1_0, M32_1_1, M32_0, M32_1;
    
    assign M64_0 = {DSP3_P[29:0], DSP2_P1[16:0], DSP1_P2[16:0]};
    assign M64_1 = {DSP6_P[3:0], DSP5_P1[16:0], DSP4_P2[16:0], 26'b0};
    assign M64 = M64_0 + M64_1;
    
-   assign M32_0_0 = {DSP2_P[14:0], DSP1_P[16:0]};
-   assign M32_0_1 = {DSP7_P[5:0], 26'b0};
-   assign M32_0 = M32_0_0 + M32_0_1;
+   assign M32_0 = {DSP2_P[14:0], DSP1_P1[16:0]};
+   assign M32_1 = {DSP5_P[14:0], DSP4_P1[16:0]};
+   
+   assign A64 = {DSP5_P[31:0], DSP1_P1[31:0]};
    
    always @ (*) begin
     case (OPCODE[5:4])
-      6'b11: O = M64;
-      6'b00: 
+      6'b10:
         begin
-          O[15:0] = DSP1_P[15:0];
-          O[31:16] = DSP4_P[15:0];
-          O[47:32] = DSP7_P[15:0];
-          O[63:48] = DSP8_P[15:0];
+          case (OPCODE[3:0])
+            4'b0001:
+              begin
+                O[31:0] = M32_0;
+                O[63:32] = M32_1;
+              end
+            default:
+              begin
+                O[31:0] = DSP1_P[31:0];
+                O[63:32]= DSP4_P[31:0];
+              end
+          endcase
+        end
+      6'b11: 
+        begin
+          case (OPCODE[3:0])
+            4'b0001:
+              O = M64;
+            4'b0000:
+              O = A64;
+            default:
+              begin
+                O[15:0] = DSP1_P[15:0];
+                O[31:16] = DSP4_P[15:0];
+                O[47:32] = DSP7_P[15:0];
+                O[63:48] = DSP8_P[15:0];
+              end
+          endcase
         end
       default: 
         begin
